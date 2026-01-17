@@ -1,0 +1,8 @@
+flask
+uuid
+groq
+google-cloud-speech
+pydub
+python-dotenv
+Pillow
+opencv-python-headless

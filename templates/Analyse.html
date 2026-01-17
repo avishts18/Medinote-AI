@@ -1,0 +1,149 @@
+<script src="https://unpkg.com/lucide@latest"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    lucide.createIcons();
+
+    const phoneInput = document.getElementById("phoneNumber");
+    const lookupBtn = document.getElementById("lookupBtn");
+    const patientInfo = document.getElementById("patientInfo");
+    const micButton = document.getElementById("micButton");
+    const pauseButton = document.getElementById("pauseButton");
+    const reportButton = document.getElementById("reportButton");
+    const languageSelect = document.getElementById("languageSelect");
+
+    let currentPatientId = null;
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let transcriptText = "";
+
+    lookupBtn.onclick = lookupPatient;
+    micButton.onclick = toggleRecording;
+    reportButton.onclick = generateReport;
+
+    /* ---------------- PATIENT LOOKUP ---------------- */
+
+    async function lookupPatient() {
+      const phone = phoneInput.value.trim();
+      if (phone.length < 10) return showError("Invalid phone number");
+
+      const res = await fetch("/lookup-patient", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone_number: phone })
+      });
+
+      if (!res.ok) return showPatientNotFound(phone);
+
+      const data = await res.json();
+      currentPatientId = data.patient_id;
+      showPatientFound(data.name);
+      enableControls();
+    }
+
+    function showPatientFound(name) {
+      patientInfo.innerHTML = `
+      <div class="success-message">
+        <div class="success-message-content">
+          <i data-lucide="check-circle"></i>
+          <span>Patient: ${name}</span>
+        </div>
+      </div>`;
+      lucide.createIcons();
+    }
+
+    function showPatientNotFound(phone) {
+      currentPatientId = null;
+      patientInfo.innerHTML = `
+      <div class="error-container">
+        <div class="error-message">
+          <i data-lucide="alert-circle"></i>
+          No patient found for ${phone}
+        </div>
+      </div>`;
+      lucide.createIcons();
+      disableControls();
+    }
+
+    /* ---------------- RECORDING ---------------- */
+
+    async function toggleRecording() {
+      if (!currentPatientId) return showError("Lookup patient first");
+
+      if (!mediaRecorder) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        mediaRecorder.onstop = uploadAudio;
+
+        mediaRecorder.start();
+        micButton.classList.add("recording");
+      } else {
+        mediaRecorder.stop();
+        mediaRecorder = null;
+        micButton.classList.remove("recording");
+      }
+    }
+
+    async function uploadAudio() {
+      const blob = new Blob(audioChunks, { type: "audio/wav" });
+      const formData = new FormData();
+      formData.append("audio", blob);
+      formData.append("patient_id", currentPatientId);
+      formData.append("language", languageSelect.value);
+
+      const res = await fetch("/upload-audio", {
+        method: "POST",
+        body: formData
+      });
+
+      if (!res.ok) return showError("Audio upload failed");
+
+      const data = await res.json();
+      transcriptText = data.transcript;
+      reportButton.disabled = false;
+    }
+
+    /* ---------------- REPORT ---------------- */
+
+    async function generateReport() {
+      if (!transcriptText) return showError("No transcript available");
+
+      const res = await fetch("/generate-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          patient_id: currentPatientId,
+          transcript: transcriptText
+        })
+      });
+
+      if (!res.ok) return showError("Report generation failed");
+
+      window.location.href = "/render_next_page";
+    }
+
+    /* ---------------- HELPERS ---------------- */
+
+    function showError(msg) {
+      patientInfo.innerHTML = `
+      <div class="error-container">
+        <div class="error-message">
+          <i data-lucide="alert-circle"></i>${msg}
+        </div>
+      </div>`;
+      lucide.createIcons();
+    }
+
+    function enableControls() {
+      micButton.disabled = false;
+      reportButton.disabled = true;
+    }
+
+    function disableControls() {
+      micButton.disabled = true;
+      reportButton.disabled = true;
+    }
+  });
+</script>

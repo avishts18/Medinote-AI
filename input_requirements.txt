@@ -1,0 +1,11 @@
+flask
+uuid
+python-dotenv
+pyaudio
+wave
+pydub
+googletrans
+langdetect
+google-cloud-translate
+google-cloud-speech
+flask_session
