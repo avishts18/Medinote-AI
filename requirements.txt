@@ -6,3 +6,5 @@ pydub
 python-dotenv
 Pillow
 opencv-python-headless
+gunicorn
+
